@@ -1,0 +1,220 @@
+// ==UserScript==
+// @name         WhatsApp Web – Hide Left Conversation List and secondary frame
+// @namespace    local.private/wa
+// @version      1.7
+// @description  Toggle sidebar ONLY in 對話 page; reset on other icons + always hide secondary frame
+// @match        https://web.whatsapp.com/*
+// @run-at       document-idle
+// @grant        none
+// @noframes
+// ==/UserScript==
+
+(function() {
+  'use strict';
+
+  /* =========================
+   *  Config
+   * ========================= */
+  const STATE_KEY = 'wa-hide-left';
+  const HIDE_CLASS = 'wa-hide-left-sidebar';
+
+  const ICON_SELECTOR = 'button[aria-label="對話"]';
+  const OVERRIDE_EXISTING_BEHAVIOR = true;
+
+  const APP_SELECTORS = [
+    '#app',
+    '.app-wrapper-web',
+    '[data-testid="wa-web-main-app"]',
+    '[data-testid="conversation-panel"]'
+  ];
+
+  const WAIT_TIMEOUT_MS = 30000;
+  const FALLBACK_DELAY_MS = 3000;
+
+  /* =========================
+   *  Utilities
+   * ========================= */
+  function waitForAnySelector(selectors, timeout = 3000) {
+    return new Promise((resolve, reject) => {
+      const start = performance.now();
+      (function check() {
+        const found = selectors.map(s => document.querySelector(s)).find(Boolean);
+        if (found) return resolve(found);
+        if (performance.now() - start > timeout) return reject(new Error('timeout'));
+        requestAnimationFrame(check);
+      })();
+    });
+  }
+
+  function debounce(fn, delay) {
+    let t; return function () { clearTimeout(t); t = setTimeout(fn, delay); };
+  }
+
+  function isOnChatPage(icon) {
+    if (icon && icon.getAttribute('data-navbar-item-selected') === 'true') {
+      return true;
+    }
+    return !!document.querySelector('[data-testid="conversation-panel"]');
+  }
+
+  function injectCSSOnce() {
+    if (document.getElementById('wa-hide-left-css')) return;
+
+    const css = `
+
+/* Hide all children */
+div[data-testid="cell-frame-secondary"] * {
+  visibility: hidden;
+}
+
+/* Show unread icon and counts */
+div[data-testid="cell-frame-secondary"] span[data-testid="icon-unread-count"],
+div[data-testid="cell-frame-secondary"] span[data-testid="icon-unread-count"] *
+{
+  visibility: visible !important;
+}
+
+/* Sidebar toggle */
+body.${HIDE_CLASS} .xc995h1 {
+  display: none !important;
+}
+
+body.${HIDE_CLASS} [data-testid="main"],
+body.${HIDE_CLASS} .app-wrapper-web .app,
+body.${HIDE_CLASS} .two,
+body.${HIDE_CLASS} ._1-FXK {
+  width: 100% !important;
+}
+
+${ICON_SELECTOR}[data-wa-hide-toggle] {
+  cursor: pointer;
+}
+
+${ICON_SELECTOR}[data-wa-hide-toggle][data-state="hidden"] {
+  color: #1ebe5c !important;
+}
+`;
+
+    const style = document.createElement('style');
+    style.id = 'wa-hide-left-css';
+    style.textContent = css;
+    document.documentElement.appendChild(style);
+  }
+
+  function loadState() {
+    try { return localStorage.getItem(STATE_KEY) === '1'; } catch { return false; }
+  }
+
+  function saveState(hidden) {
+    try { localStorage.setItem(STATE_KEY, hidden ? '1' : '0'); } catch {}
+  }
+
+  function updateIconState(hidden) {
+    document.querySelectorAll(ICON_SELECTOR).forEach(icon => {
+      icon.setAttribute('data-wa-hide-toggle', '1');
+      icon.setAttribute('data-state', hidden ? 'hidden' : 'shown');
+
+      if (!isOnChatPage(icon)) {
+        icon.style.opacity = '0.5';
+        icon.title = 'Toggle only works in 對話 page';
+      } else {
+        icon.style.opacity = '';
+        icon.title = hidden ? 'Show' : 'Hide';
+      }
+    });
+  }
+
+  function setHidden(hidden) {
+    document.body.classList.toggle(HIDE_CLASS, hidden);
+    updateIconState(hidden);
+    saveState(hidden);
+  }
+
+  /* =========================
+   *  Binding to icon
+   * ========================= */
+  function bindToIcon(icon) {
+    if (!icon || icon.dataset.waHideBound === '1') return;
+
+    icon.dataset.waHideBound = '1';
+    icon.setAttribute('data-wa-hide-toggle', '1');
+
+    updateIconState(document.body.classList.contains(HIDE_CLASS));
+
+    icon.addEventListener('click', (e) => {
+      const shouldToggle = OVERRIDE_EXISTING_BEHAVIOR || e.shiftKey;
+
+      if (shouldToggle && isOnChatPage(icon)) {
+        if (OVERRIDE_EXISTING_BEHAVIOR) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+
+        const nowHidden = !document.body.classList.contains(HIDE_CLASS);
+        setHidden(nowHidden);
+      }
+    }, OVERRIDE_EXISTING_BEHAVIOR ? true : false);
+  }
+
+  function bindAllIcons() {
+    document.querySelectorAll(ICON_SELECTOR).forEach(bindToIcon);
+  }
+
+  function bindGlobalResetOnOtherIcons() {
+    document.addEventListener('click', (e) => {
+      const btn = e.target && e.target.closest && e.target.closest(
+        'button[aria-label="動態"], button[aria-label="頻道"], button[aria-label="社群"], button[aria-label="你"]'
+      );
+
+      if (!btn) return;
+      if (btn.matches(ICON_SELECTOR)) return;
+
+      if (document.body.classList.contains(HIDE_CLASS)) {
+        setHidden(false);
+      }
+
+    }, true);
+  }
+
+  /* =========================
+   *  Init
+   * ========================= */
+  async function safeInit() {
+    injectCSSOnce();
+
+    if (loadState()) document.body.classList.add(HIDE_CLASS);
+
+    try {
+      await waitForAnySelector([...APP_SELECTORS, ICON_SELECTOR], WAIT_TIMEOUT_MS);
+    } catch {
+      await new Promise(r => setTimeout(r, FALLBACK_DELAY_MS));
+    }
+
+    bindAllIcons();
+    bindGlobalResetOnOtherIcons();
+
+    const mo = new MutationObserver(debounce(() => {
+      injectCSSOnce();
+      bindAllIcons();
+      updateIconState(document.body.classList.contains(HIDE_CLASS));
+    }, 300));
+
+    mo.observe(document.documentElement, { subtree: true, childList: true });
+
+    window.addEventListener('pageshow', () => {
+      setHidden(document.body.classList.contains(HIDE_CLASS));
+    }, { passive: true });
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        setHidden(document.body.classList.contains(HIDE_CLASS));
+      }
+    }, { passive: true });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => safeInit(), { once: true });
+  } else {
+    safeInit();
+  }
+})();

@@ -4,9 +4,9 @@ A script that can be used in Tampermonkey to enable a icon to hide the left chat
 Features:
 * Hide left chats bar
 * Hide preview text (will still show the label when new message come in)
-https://github.com/user-attachments/assets/ee504290-aa5d-4f9f-8fdc-c03352fae502
+Example Video: https://github.com/user-attachments/assets/ee504290-aa5d-4f9f-8fdc-c03352fae502
 * Show preview text when hover for a second
-https://github.com/user-attachments/assets/06a37d6e-7efd-4c01-a532-399e3df2d47c
+Example Video: https://github.com/user-attachments/assets/06a37d6e-7efd-4c01-a532-399e3df2d47c
 
 Steps:
 1. Download "TamperMonkey" from extension store

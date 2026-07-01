@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         WhatsApp Web – Hide Left Conversation List and secondary frame
+// @name         WhatsApp Web – Hide Left Chats List and preview text in Chats
 // @namespace    local.private/wa
-// @version      1.7
-// @description  Toggle sidebar ONLY in 對話 page; reset on other icons + always hide secondary frame
+// @version      1.0
+// @description  Toggle sidebar only in Chats page; reset on other icons; hide secondary frame and show when hover
 // @match        https://web.whatsapp.com/*
 // @run-at       document-idle
 // @grant        none
@@ -18,7 +18,7 @@
   const STATE_KEY = 'wa-hide-left';
   const HIDE_CLASS = 'wa-hide-left-sidebar';
 
-  const ICON_SELECTOR = 'button[aria-label="對話"]';
+  const ICON_SELECTOR = 'button[aria-label="對話"], button[aria-label="Chats"]';
   const OVERRIDE_EXISTING_BEHAVIOR = true;
 
   const APP_SELECTORS = [
@@ -65,6 +65,14 @@
 /* Hide all children */
 div[data-testid="cell-frame-secondary"] * {
   visibility: hidden;
+}
+
+/* Show children when hovering the div for 0.5 sec*/
+div[data-testid="cell-frame-secondary"]:hover * {
+  visibility: visible;
+  opacity: 1;
+  transition-delay: 0.5s;
+
 }
 
 /* Show unread icon and counts */
@@ -163,7 +171,7 @@ ${ICON_SELECTOR}[data-wa-hide-toggle][data-state="hidden"] {
   function bindGlobalResetOnOtherIcons() {
     document.addEventListener('click', (e) => {
       const btn = e.target && e.target.closest && e.target.closest(
-        'button[aria-label="動態"], button[aria-label="頻道"], button[aria-label="社群"], button[aria-label="你"]'
+        'button[aria-label="動態"], button[aria-label="頻道"], button[aria-label="社群"], button[aria-label="你"], button[aria-label="Status"], button[aria-label="Channels"], button[aria-label="Communities"], button[aria-label="You"]'
       );
 
       if (!btn) return;
